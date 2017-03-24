@@ -3,6 +3,7 @@
 
 import tensorflow as tf
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 
@@ -78,4 +79,126 @@ with tf.Session() as sess:
     for _ in range(3):
         sess.run(update)
         print(sess.run(state)) #point to sess.run(state) that we could see result
+
+
+
+##8 Placehoder
+#like give a variable, but with empty content, given value below in session
+input1 = tf.placeholder(tf.float32) #default only flo32, [1,1] sturcture
+input2 = tf.placeholder(tf.float32) #default only flo32
+
+output = tf.multiply(input1,input2)
+
+with tf.Session() as sess:
+    print(sess.run(output,feed_dict={input1:[7.],input2:[2.]}))
+#each time feed with different value from a dictionary
+
+
+
+##9 Activation function
+#for non-linear function
+#y = AF(Wx)
+#AF: relu, sigmoid, tanh, should be differentiable
+#small: any above, cNN: relu, rNN: relu or tanh
+
+
+
+##10 Activation function
+#eg. AF(x) = x*1(x>0) is relu
+#activate after Wx+b
+#above: tf.nn.relu()
+#classification problem: tf.nn.softplus()
+#reduce overfitting: tf.nn.dropout()
+#tf.nn.sigmoid(x)
+#tf.nn.tanh(x)
+
+
+
+##1112 Add define layer ##13 Plot result
+#ex 2-layer
+#add a layer from input, act_funct then output
+def add_layer(inputs,in_size,out_size,activation_function=None):
+    Weights = tf.Variable(tf.random_normal([in_size,out_size])) #random better than all zero
+    biases = tf.Variable(tf.zeros([1,out_size])+0.1) #hope not zero+0.1
+    Wx_plus_b = tf.matmul(inputs,Weights) + biases
+    if activation_function is None:
+        outputs = Wx_plus_b
+    else:
+        outputs = activation_function(Wx_plus_b)
+    return outputs
+
+#give data
+x_data = np.linspace(-1,1,300)[:,np.newaxis] #add new axis
+noise = np.random.normal(0,0.05,x_data.shape)#add something different
+y_data = np.square(x_data) - 0.5 + noise
+
+#give space for x, y for later session feeding
+xs = tf.placeholder(tf.float32,[None,1])
+ys = tf.placeholder(tf.float32,[None,1]) 
+
+#input 1x -> hidden10 -> output 1y, 3layers
+l1 = add_layer(xs, 1, 10, activation_function=tf.nn.relu) #1 to 2
+prediction = add_layer(l1, 10, 1, activation_function = None) #2 to 3
+
+#predict the loss by GD
+loss = tf.reduce_mean(tf.reduce_sum(tf.square(ys-prediction),
+                     reduction_indices=[1])) #sum: reduce_sum(), mean: reduce_mean()
+train_step = tf.train.GradientDescentOptimizer(0.1).minimize(loss) #how to optimize? give alpha=0.1
+
+#initialize
+init = tf.global_variables_initializer()
+sess = tf.Session()
+sess.run(init)
+
+#plot
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.scatter(x_data,y_data)
+plt.ion() #continue run, without pause
+plt.show()
+
+for i in range(1000):
+    sess.run(train_step, feed_dict={xs:x_data,ys:y_data}) #small step more effici
+    if i%50 == 0:
+        #output show loss, become smaller as more steps
+        #print(sess.run(loss,feed_dict={xs:x_data,ys:y_data}))
         
+        #plot the prediction y based on x_data, and line as red
+        try:
+            ax.lines.remove(lines[0]) #可能一開始沒有線 要先try 怕報錯不繼續跑
+        except Exception:
+            pass
+        prediction_value = sess.run(prediction,feed_dict={xs:x_data})
+        lines = ax.plot(x_data,prediction_value, 'r-',lw=5)        
+        plt.pause(0.1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
