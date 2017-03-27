@@ -114,7 +114,7 @@ with tf.Session() as sess:
 
 
 
-##1112 Add define layer ##13 Plot result
+##11##12 Add define layer ##13 Plot result
 #ex 2-layer
 #add a layer from input, act_funct then output
 def add_layer(inputs,in_size,out_size,activation_function=None):
@@ -124,7 +124,7 @@ def add_layer(inputs,in_size,out_size,activation_function=None):
     if activation_function is None:
         outputs = Wx_plus_b
     else:
-        outputs = activation_function(Wx_plus_b)
+        outputs = activation_function(Wx_plus_b,)
     return outputs
 
 #give data
@@ -143,7 +143,9 @@ prediction = add_layer(l1, 10, 1, activation_function = None) #2 to 3
 #predict the loss by GD
 loss = tf.reduce_mean(tf.reduce_sum(tf.square(ys-prediction),
                      reduction_indices=[1])) #sum: reduce_sum(), mean: reduce_mean()
-train_step = tf.train.GradientDescentOptimizer(0.1).minimize(loss) #how to optimize? give alpha=0.1
+train_step = tf.train.AdamOptimizer(0.1).minimize(loss) #how to optimize? give alpha=0.1
+#GradientDescentOptimizer()
+#AdamOptimizer() #faster
 
 #initialize
 init = tf.global_variables_initializer()
@@ -174,31 +176,210 @@ for i in range(1000):
 
 
 
+##15 ##16 Optimizer
+#SGD: cut into batch
+#other method like: Adadelta, Adagrad, NAG, Momentum, AdamOptimizer, FtrlOptimizer, RMSProp
+        
+#Momentum
+#W += -learning rate*dx, more curve and puting into slope as momentum
+#m = b1*m-learning rate*dx
+#W += m
+
+#AdaGrad
+#put on a bad shoes
+#v += dx^2
+#W += -leanring rate*dx/sqrt(v)
+
+#RMSProp
+#combine Momentum, AdaGrad
+#v = b1*v+(1-b1)*dx^2
+#W += -learning rate*dx/sqrt(v)
+
+#Adam
+#better and fast converge
+#m = b1*m+(1-b1)*dx
+#v = b2*v+(1-b2)*dx^2
+#W += -learning rate*m/sqrt(v)
 
 
 
+#17 Tensorboard
+#annotate each node, and will be visualized in browser
+
+def add_layer(inputs, in_size, out_size, activation_function=None):
+    # add one more layer and return the output of this layer
+    with tf.name_scope('layer'):
+        with tf.name_scope('weights'):
+            Weights = tf.Variable(tf.random_normal([in_size, out_size]), name='W')
+        with tf.name_scope('biases'):
+            biases = tf.Variable(tf.zeros([1, out_size]) + 0.1, name='b')
+        with tf.name_scope('Wx_plus_b'):
+            Wx_plus_b = tf.add(tf.matmul(inputs, Weights), biases)
+        if activation_function is None:
+            outputs = Wx_plus_b
+        else:
+            outputs = activation_function(Wx_plus_b, )
+        return outputs
+
+
+# define placeholder for inputs to network
+with tf.name_scope('inputs'):
+    xs = tf.placeholder(tf.float32, [None, 1], name='x_input')
+    ys = tf.placeholder(tf.float32, [None, 1], name='y_input')
+
+# add hidden layer
+l1 = add_layer(xs, 1, 10, activation_function=tf.nn.relu)
+# add output layer
+prediction = add_layer(l1, 10, 1, activation_function=None)
+
+# the error between prediciton and real data
+with tf.name_scope('loss'):
+    loss = tf.reduce_mean(tf.reduce_sum(tf.square(ys - prediction),
+                                        reduction_indices=[1]))
+
+with tf.name_scope('train'):
+    train_step = tf.train.GradientDescentOptimizer(0.1).minimize(loss)
+
+sess = tf.Session()
+
+# tf.train.SummaryWriter soon be deprecated, use following
+if int((tf.__version__).split('.')[1]) < 12 and int((tf.__version__).split('.')[0]) < 1:  # tensorflow version < 0.12
+    writer = tf.train.SummaryWriter('logs/', sess.graph)
+else: # tensorflow version >= 0.12
+    writer = tf.summary.FileWriter("logs/", sess.graph)
+
+# tf.initialize_all_variables() no long valid from
+# 2017-03-02 if using tensorflow >= 0.12
+if int((tf.__version__).split('.')[1]) < 12 and int((tf.__version__).split('.')[0]) < 1:
+    init = tf.initialize_all_variables()
+else:
+    init = tf.global_variables_initializer()
+sess.run(init)
+
+#after running, switch to current work directory in cmd
+#cmd type: tensorboard --logdir=logs
+#open the browser as instructed http://192.168.137.1:6006/
+#under tag GRAPHS
 
 
 
+##18 Tensorboard2
+#hist, bias, event: show loss
+def add_layer(inputs, in_size, out_size, n_layer, activation_function=None):
+    # add one more layer and return the output of this layer
+    layer_name = 'layer%s' % n_layer
+    with tf.name_scope(layer_name):
+        with tf.name_scope('weights'):
+            Weights = tf.Variable(tf.random_normal([in_size, out_size]), name='W')
+            tf.summary.histogram(layer_name + '/weights', Weights)
+            #give hist layer name weight 1 weights
+        with tf.name_scope('biases'):
+            biases = tf.Variable(tf.zeros([1, out_size]) + 0.1, name='b')
+            tf.summary.histogram(layer_name + '/biases', biases)
+        with tf.name_scope('Wx_plus_b'):
+            Wx_plus_b = tf.add(tf.matmul(inputs, Weights), biases)
+        if activation_function is None:
+            outputs = Wx_plus_b
+        else:
+            outputs = activation_function(Wx_plus_b, )
+        tf.summary.histogram(layer_name + '/outputs', outputs)
+    return outputs
+
+
+# Make up some real data
+x_data = np.linspace(-1, 1, 300)[:, np.newaxis]
+noise = np.random.normal(0, 0.05, x_data.shape)
+y_data = np.square(x_data) - 0.5 + noise
+
+# define placeholder for inputs to network
+with tf.name_scope('inputs'):
+    xs = tf.placeholder(tf.float32, [None, 1], name='x_input')
+    ys = tf.placeholder(tf.float32, [None, 1], name='y_input')
+
+# add hidden layer
+l1 = add_layer(xs, 1, 10, n_layer=1, activation_function=tf.nn.relu)
+# add output layer
+prediction = add_layer(l1, 10, 1, n_layer=2, activation_function=None)
+
+# the error between prediciton and real data
+with tf.name_scope('loss'):
+    loss = tf.reduce_mean(tf.reduce_sum(tf.square(ys - prediction),
+                                        reduction_indices=[1]))
+    tf.summary.scalar('loss', loss)
+    #visualize the loss in event, pure scalar
+
+with tf.name_scope('train'):
+    train_step = tf.train.GradientDescentOptimizer(0.1).minimize(loss)
+
+sess = tf.Session()
+merged = tf.summary.merge_all()
+#merge all summary in graph
+
+writer = tf.summary.FileWriter("logs/", sess.graph)
+
+init = tf.global_variables_initializer()
+sess.run(init)
+
+for i in range(1000):
+    sess.run(train_step, feed_dict={xs: x_data, ys: y_data})
+    if i % 50 == 0:
+        result = sess.run(merged,
+                          feed_dict={xs: x_data, ys: y_data})
+        writer.add_summary(result, i)
+#record merged every 50 steps, and add in summary i
 
 
 
+##19 Classification in TF
+#MNIST input data 28x28=784, output (0100000000)
+from tensorflow.examples.tutorials.mnist import input_data
 
+#number 0 to 9
+mnist = input_data.read_data_sets('MNIST_data',one_hot=True)
 
+def add_layer(inputs, in_size, out_size, activation_function=None,):
+    # add one more layer and return the output of this layer
+    Weights = tf.Variable(tf.random_normal([in_size, out_size]))
+    biases = tf.Variable(tf.zeros([1, out_size]) + 0.1,)
+    Wx_plus_b = tf.matmul(inputs, Weights) + biases
+    if activation_function is None:
+        outputs = Wx_plus_b
+    else:
+        outputs = activation_function(Wx_plus_b,)
+    return outputs
 
+def compute_accuracy(v_xs, v_ys):
+    global prediction
+    y_pre = sess.run(prediction, feed_dict={xs: v_xs})
+    correct_prediction = tf.equal(tf.argmax(y_pre,1), tf.argmax(v_ys,1))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    result = sess.run(accuracy, feed_dict={xs: v_xs, ys: v_ys})
+    return result
 
+# define placeholder for inputs to network
+xs = tf.placeholder(tf.float32, [None, 784]) # 28x28
+ys = tf.placeholder(tf.float32, [None, 10])
 
+# add output layer
+prediction = add_layer(xs, 784, 10,  activation_function=tf.nn.softmax)
 
+# the error between prediction and real data
+cross_entropy = tf.reduce_mean(-tf.reduce_sum(ys * tf.log(prediction),
+                                              reduction_indices=[1]))       # loss
+train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
 
+sess = tf.Session()
+# important step
+# tf.initialize_all_variables() no long valid from
+# 2017-03-02 if using tensorflow >= 0.12
+if int((tf.__version__).split('.')[1]) < 12 and int((tf.__version__).split('.')[0]) < 1:
+    init = tf.initialize_all_variables()
+else:
+    init = tf.global_variables_initializer()
+sess.run(init)
 
-
-
-
-
-
-
-
-
-
-
-
+for i in range(1000):
+    batch_xs, batch_ys = mnist.train.next_batch(100)
+    sess.run(train_step, feed_dict={xs: batch_xs, ys: batch_ys})
+    if i % 50 == 0:
+        print(compute_accuracy(mnist.test.images, mnist.test.labels))
