@@ -383,3 +383,181 @@ for i in range(1000):
     sess.run(train_step, feed_dict={xs: batch_xs, ys: batch_ys})
     if i % 50 == 0:
         print(compute_accuracy(mnist.test.images, mnist.test.labels))
+
+
+
+##20 Overfit
+#minimize error as possible with train data
+#error increase when with test data
+#sol: increase data size, L1,L2 regularization, dropout regularization(drop some neuron unit)
+#y = Wx
+#cost = (Wx - real_y)^2 + abs(W) <<L1
+
+
+
+
+##21 Overfit, dropout
+from sklearn.datasets import load_digits
+from sklearn.cross_validation import train_test_split
+from sklearn.preprocessing import LabelBinarizer
+
+# load data
+digits = load_digits()
+X = digits.data
+y = digits.target
+y = LabelBinarizer().fit_transform(y)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.3)
+
+
+def add_layer(inputs, in_size, out_size, layer_name, activation_function=None, ):
+    # add one more layer and return the output of this layer
+    Weights = tf.Variable(tf.random_normal([in_size, out_size]))
+    biases = tf.Variable(tf.zeros([1, out_size]) + 0.1, )
+    Wx_plus_b = tf.matmul(inputs, Weights) + biases
+    # here to dropout
+    #how much percent knots to keep?
+    Wx_plus_b = tf.nn.dropout(Wx_plus_b, keep_prob)
+    if activation_function is None:
+        outputs = Wx_plus_b
+    else:
+        outputs = activation_function(Wx_plus_b, )
+    tf.summary.histogram(layer_name + '/outputs', outputs) #histgram sum
+    return outputs
+
+
+# define placeholder for inputs to network
+keep_prob = tf.placeholder(tf.float32)
+xs = tf.placeholder(tf.float32, [None, 64])  # 8x8
+ys = tf.placeholder(tf.float32, [None, 10])
+
+# add output layer
+l1 = add_layer(xs, 64, 50, 'l1', activation_function=tf.nn.tanh) #avoid into None
+#if into 100 nots, will be too much
+prediction = add_layer(l1, 50, 10, 'l2', activation_function=tf.nn.softmax)
+
+# the loss between prediction and real data
+cross_entropy = tf.reduce_mean(-tf.reduce_sum(ys * tf.log(prediction),
+                                              reduction_indices=[1]))  # loss
+tf.summary.scalar('loss', cross_entropy) #scala sum
+train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
+
+sess = tf.Session()
+merged = tf.summary.merge_all()
+# summary writer goes in here
+train_writer = tf.summary.FileWriter("logs/train", sess.graph)
+test_writer = tf.summary.FileWriter("logs/test", sess.graph)
+
+# tf.initialize_all_variables() no long valid from
+# 2017-03-02 if using tensorflow >= 0.12
+if int((tf.__version__).split('.')[1]) < 12 and int((tf.__version__).split('.')[0]) < 1:
+    init = tf.initialize_all_variables()
+else:
+    init = tf.global_variables_initializer()
+sess.run(init)
+
+for i in range(500):
+    # here to determine the keeping probability
+    sess.run(train_step, feed_dict={xs: X_train, ys: y_train, keep_prob: 0.5})
+    #assign how much probability to drop/keep
+    if i % 50 == 0:
+        # record loss
+        train_result = sess.run(merged, feed_dict={xs: X_train, ys: y_train, keep_prob: 1})
+        test_result = sess.run(merged, feed_dict={xs: X_test, ys: y_test, keep_prob: 1})
+        train_writer.add_summary(train_result, i)
+        test_writer.add_summary(test_result, i)
+
+#then shift to log directory
+#tensorboard --logdir='logs'
+
+
+
+##22 CNN1
+#compress length,width in a patch then increase depth in a image to next convolution layer
+#stride, how many steps each
+#valid padding: smaller size than origin, same padding: same size
+#pooling: use pooling to prevent lost info, use stride=1 then pooling to condense to smaller size
+#max pooling, average pooling
+
+
+
+##23 CNN2,3
+from tensorflow.examples.tutorials.mnist import input_data
+# number 1 to 10 data
+mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
+
+def compute_accuracy(v_xs, v_ys):
+    global prediction
+    y_pre = sess.run(prediction, feed_dict={xs: v_xs, keep_prob: 1})
+    correct_prediction = tf.equal(tf.argmax(y_pre,1), tf.argmax(v_ys,1))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    result = sess.run(accuracy, feed_dict={xs: v_xs, ys: v_ys, keep_prob: 1})
+    return result
+
+def weight_variable(shape):
+    initial = tf.truncated_normal(shape, stddev=0.1)
+    return tf.Variable(initial)
+
+def bias_variable(shape):
+    initial = tf.constant(0.1, shape=shape)
+    #positive better
+    return tf.Variable(initial)
+
+def conv2d(x, W):
+    # 2-dim cnn, input all info=x
+    # stride [1, x_movement, y_movement, 1]
+    # Must have strides[0] = strides[3] = 1
+    return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
+
+def max_pool_2x2(x):
+    # prevent too many stride, use pooling to prevent
+    # stride [1, x_movement, y_movement, 1]
+    # ksize:
+    # strides: 1,2,2,1 making smaller
+    return tf.nn.max_pool(x, ksize=[1,2,2,1], strides=[1,2,2,1], padding='SAME')
+
+# define placeholder for inputs to network
+xs = tf.placeholder(tf.float32, [None, 784]) # 28x28
+ys = tf.placeholder(tf.float32, [None, 10])
+keep_prob = tf.placeholder(tf.float32)
+x_image=tf.reshape(xs,[-1,28,28,1]) #-1 avoid the axis, 1 as channel b/w, 3 color
+#print(x_image.shape) #should be [n_samples,28,28,1]
+
+## conv1 layer ##
+W_conv1 = weight_variable([5,5,1,32]) #patch 5x5, insize 1 origin, outsize 32 new convo
+b_conv1 = bias_variable([32])
+h_conv1 = tf.nn.relu(conv2d(x_image,W_conv1) + b_conv1) # nolinear, output 28x28x32
+h_pool1 = max_pool_2x2(h_conv1)                         # output 14x14x32
+
+## conv2 layer ##
+W_conv2 = weight_variable([5,5,32,64]) #patch 5x5, insize 32 origin, outsize 64 new convo
+b_conv2 = bias_variable([64])
+h_conv2 = tf.nn.relu(conv2d(x_image,W_conv2) + b_conv2) # nolinear, output 14x14x64
+h_pool2 = max_pool_2x2(h_conv2)                         # output 7x7x64
+
+## func1 layer ##
+
+## func2 layer ##
+
+
+# the error between prediction and real data
+cross_entropy = tf.reduce_mean(-tf.reduce_sum(ys * tf.log(prediction),
+                                              reduction_indices=[1]))       # loss
+train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+
+sess = tf.Session()
+# important step
+# tf.initialize_all_variables() no long valid from
+# 2017-03-02 if using tensorflow >= 0.12
+if int((tf.__version__).split('.')[1]) < 12 and int((tf.__version__).split('.')[0]) < 1:
+    init = tf.initialize_all_variables()
+else:
+    init = tf.global_variables_initializer()
+sess.run(init)
+
+for i in range(1000):
+    batch_xs, batch_ys = mnist.train.next_batch(100)
+    sess.run(train_step, feed_dict={xs: batch_xs, ys: batch_ys, keep_prob: 0.5})
+    if i % 50 == 0:
+        print(compute_accuracy(
+mnist.test.images, mnist.test.labels))
+
