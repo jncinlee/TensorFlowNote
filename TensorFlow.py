@@ -531,18 +531,27 @@ h_pool1 = max_pool_2x2(h_conv1)                         # output 14x14x32
 ## conv2 layer ##
 W_conv2 = weight_variable([5,5,32,64]) #patch 5x5, insize 32 origin, outsize 64 new convo
 b_conv2 = bias_variable([64])
-h_conv2 = tf.nn.relu(conv2d(x_image,W_conv2) + b_conv2) # nolinear, output 14x14x64
+h_conv2 = tf.nn.relu(conv2d(h_pool1,W_conv2) + b_conv2) # nolinear, output 14x14x64
 h_pool2 = max_pool_2x2(h_conv2)                         # output 7x7x64
 
 ## func1 layer ##
+W_f1 = weight_variable([7*7*64,1024]) #output from conv2, flatten
+b_f1 = bias_variable([1024])
+#[n_sample,7,7,64] >> [n_sample,7*7*64] flatten
+h_pool2_flat = tf.reshape(h_pool2,[-1,7*7*64])
+h_f1 = tf.nn.relu(tf.matmul(h_pool2_flat,W_f1)+b_f1)
+h_f1_drop = tf.nn.dropout(h_f1,keep_prob)
 
-## func2 layer ##
-
+## func2 layer ## #last layer into 10 output
+W_f2 = weight_variable([1024,10]) #output from conv2, flatten
+b_f2 = bias_variable([10])
+prediction = tf.nn.softmax(tf.matmul(h_f1_drop,W_f2)+b_f2)
 
 # the error between prediction and real data
 cross_entropy = tf.reduce_mean(-tf.reduce_sum(ys * tf.log(prediction),
-                                              reduction_indices=[1]))       # loss
-train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+                                              reduction_indices=[1]))
+# loss
+train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy) #adam better for large network
 
 sess = tf.Session()
 # important step
@@ -561,5 +570,7 @@ for i in range(1000):
         print(compute_accuracy(
 mnist.test.images, mnist.test.labels))
         
-##
+        
+
+
 
